@@ -28,13 +28,6 @@ type Metric struct {
 func HttpHandler(registry *Registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		// w.Write([]byte("whatever"))
-
-		// var payload []interface{}
-		// strings := r.buildStringTable(&payload, measurements)
-		// for _, m := range measurements {
-		// 	r.appendMeasurement(&payload, strings, m)
-		// }
 		payload := registry.GetExport()
 		b, _ := json.Marshal(payload)
 		w.Write(b)

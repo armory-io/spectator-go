@@ -91,8 +91,6 @@ func (r *Registry) SetLogger(logger Logger) {
 }
 
 func (r *Registry) GetExport() map[string]Metric {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
 	return r.export
 }
 
@@ -183,27 +181,27 @@ func (r *Registry) publish() {
 	if r.config.Uri == "" {
 		// internal publish
 		// 	We merge new metrics into the Export as sample instances are not the same for all metrics
-		new := Convert(r)
+		metrics := Convert(r)
 		export := r.GetExport()
-		for k, v := range new {
+		for k, v := range metrics {
 			export[k] = v
 		}
 		r.SetExport(export)
-	} else {
-		// external publish
-		measurements := r.Measurements()
-		r.config.Log.Debugf("Got %d measurements", len(measurements))
-		if !r.config.IsEnabled() {
-			return
-		}
+		return
+	}
+	// external publish
+	measurements := r.Measurements()
+	r.config.Log.Debugf("Got %d measurements", len(measurements))
+	if !r.config.IsEnabled() {
+		return
+	}
 
-		for i := 0; i < len(measurements); i += r.config.BatchSize {
-			end := i + r.config.BatchSize
-			if end > len(measurements) {
-				end = len(measurements)
-			}
-			r.sendBatch(measurements[i:end])
+	for i := 0; i < len(measurements); i += r.config.BatchSize {
+		end := i + r.config.BatchSize
+		if end > len(measurements) {
+			end = len(measurements)
 		}
+		r.sendBatch(measurements[i:end])
 	}
 }
 
