@@ -9,9 +9,11 @@ Simple library for instrumenting code to record dimensional time series.
 
 This implements a basic [Spectator](https://github.com/Netflix/spectator)
 library for instrumenting golang applications, sending metrics to an Atlas
-aggregator service.
+aggregator service OR exposing metrics via an endpoint handler.
 
 ## Instrumenting Code
+
+### Implemented to Send Metrics
 
 ```go
 package main
@@ -98,4 +100,50 @@ func main() {
 
 ```
 
+### Implemented to Expose an Endpoint to Scrape Metrics
 
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/Netflix/spectator-go"
+)
+
+func main() {
+	// setting no Uri in the registry config switchs to internal publish
+	commonTags := map[string]string{"nf.app": "example", "nf.region": "us-west-1"}
+	config := &spectator.Config{Frequency: 5 * time.Second, Timeout: 1 * time.Second,
+		CommonTags: commonTags}
+	registry := spectator.NewRegistry(config)
+
+	// optionally set custom logger (needs to implement Debugf, Infof, Errorf)
+	// registry.SetLogger(logger)
+	registry.Start()
+	defer registry.Stop()
+
+	// collect memory and file descriptor metrics
+	spectator.CollectRuntimeMetrics(registry)
+
+	// attach spectators handler to your server to scrape metrics
+	router := http.NewServeMux()
+	handlerfunc := spectator.HttpHandler(registry)
+	router.HandleFunc("/spectator/metrics", handlerfunc)
+
+	httpServer := &http.Server{
+		Addr:    ":3000",
+		Handler: router,
+	}
+	fmt.Println("Server starting up")
+	if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	fmt.Println("Server shutdown")
+}
+
+```
