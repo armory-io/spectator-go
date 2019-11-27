@@ -3,6 +3,7 @@ package spectator
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -239,4 +240,144 @@ func TestRegistry_enabled(t *testing.T) {
 	r.Counter("foo", nil).Add(10)
 	r.publish()
 	assertEqual(t, called, 3, "expected 3 publish calls")
+}
+
+func TestConvert(t *testing.T) {
+
+	cases := map[string]struct {
+		setup           func(*Registry)
+		expectedOutputs map[string]Metric
+	}{
+		"one counter": {
+			setup: func(r *Registry) {
+				cntr := r.Counter("test.test", map[string]string{})
+				cntr.Increment()
+			},
+			expectedOutputs: map[string]Metric{
+				"test.test": Metric{
+					Kind: "Counter",
+					Values: []TopValue{
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "count"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 1, T: 0},
+							},
+						},
+					},
+				},
+			},
+		},
+		"one counter with extra tags": {
+			setup: func(r *Registry) {
+				cntr := r.Counter("test.test", map[string]string{
+					"test":  "yes",
+					"yoda":  "false",
+					"rodeo": "true",
+				})
+				cntr.Increment()
+			},
+			expectedOutputs: map[string]Metric{
+				"test.test": Metric{
+					Kind: "Counter",
+					Values: []TopValue{
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "count"},
+								Tag{Key: "test", Value: "yes"},
+								Tag{Key: "yoda", Value: "false"},
+								Tag{Key: "rodeo", Value: "true"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 1, T: 0},
+							},
+						},
+					},
+				},
+			},
+		},
+		"two counters": {
+			setup: func(r *Registry) {
+				cntr1 := r.Counter("test.one", map[string]string{})
+				cntr1.Increment()
+				cntr2 := r.Counter("test.two", map[string]string{})
+				cntr2.Increment()
+				cntr2.Increment()
+			},
+			expectedOutputs: map[string]Metric{
+				"test.one": Metric{
+					Kind: "Counter",
+					Values: []TopValue{
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "count"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 1, T: 0},
+							},
+						},
+					},
+				},
+				"test.two": Metric{
+					Kind: "Counter",
+					Values: []TopValue{
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "count"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 2, T: 0},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for testName, c := range cases {
+		t.Run(testName, func(t *testing.T) {
+			r := NewRegistry(config)
+			c.setup(r)
+			out := Convert(r)
+
+			// verify same length
+			assert.Equal(t, len(out), len(c.expectedOutputs), "Results should have the same length")
+			// drill down and compare
+			for name, metric := range c.expectedOutputs {
+				assert.Contains(t, out, name, "Metric should exist in output")
+				outmetric := out[name]
+				assert.Equal(t, metric.Kind, outmetric.Kind, "Metric kind should be equal")
+				assert.Equal(t, len(metric.Values), len(outmetric.Values), "Metric values should have the same length")
+
+				topvalue := metric.Values[0] // this works because there is only one topvalue
+				outtopvalue := outmetric.Values[0]
+
+				// tags should match
+				assert.ElementsMatch(t, topvalue.Tags, outtopvalue.Tags, "Tags should match")
+
+				// values should match
+				assert.Equal(t, topvalue.Values[0].V, outtopvalue.Values[0].V, "Values should match")
+
+			}
+
+		})
+	}
 }
