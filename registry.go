@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ type Registry struct {
 	mutex   *sync.Mutex
 	http    *HttpClient
 	quit    chan struct{}
+	export  map[string]Metric
 }
 
 func NewRegistryConfiguredBy(filePath string) (*Registry, error) {
@@ -64,7 +66,7 @@ func NewRegistry(config *Config) *Registry {
 	}
 
 	r := &Registry{&SystemClock{}, config, map[string]Meter{}, false,
-		&sync.Mutex{}, nil, make(chan struct{})}
+		&sync.Mutex{}, nil, make(chan struct{}), map[string]Metric{}}
 	r.http = NewHttpClient(r, r.config.Timeout)
 	return r
 }
@@ -88,9 +90,19 @@ func (r *Registry) SetLogger(logger Logger) {
 	r.config.Log = logger
 }
 
+func (r *Registry) GetExport() map[string]Metric {
+	return r.export
+}
+
+func (r *Registry) SetExport(e map[string]Metric) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.export = e
+}
+
 func (r *Registry) Start() error {
-	if r.config == nil || r.config.Uri == "" {
-		err := fmt.Sprintf("registry config has no uri. Ignoring Start request")
+	if r.config == nil {
+		err := fmt.Sprintf("registry config does not exist. Ignoring Start request")
 		r.config.Log.Infof(err)
 		return fmt.Errorf(err)
 	}
@@ -166,10 +178,18 @@ func (r *Registry) sendBatch(measurements []Measurement) {
 }
 
 func (r *Registry) publish() {
-	if len(r.config.Uri) == 0 {
+	if r.config.Uri == "" {
+		// internal publish
+		// 	We merge new metrics into the Export as sample instances are not the same for all metrics
+		metrics := Convert(r)
+		export := r.GetExport()
+		for k, v := range metrics {
+			export[k] = v
+		}
+		r.SetExport(export)
 		return
 	}
-
+	// external publish
 	measurements := r.Measurements()
 	r.config.Log.Debugf("Got %d measurements", len(measurements))
 	if !r.config.IsEnabled() {
@@ -355,4 +375,47 @@ func (r *Registry) DistributionSummaryWithId(id *Id) *DistributionSummary {
 
 func (r *Registry) DistributionSummary(name string, tags map[string]string) *DistributionSummary {
 	return r.DistributionSummaryWithId(NewId(name, tags))
+}
+
+func Convert(r *Registry) map[string]Metric {
+	// Take a Registry, convert and return all internal measurements in a format for export
+
+	data := map[string]Metric{}
+	ctags := r.config.CommonTags
+
+	for _, meter := range r.meters {
+		kind := reflect.TypeOf(meter).Elem().Name()
+
+		for _, measurement := range meter.Measure() {
+			if shouldSendMeasurement(measurement) {
+				name := measurement.Id().Name()
+				value := int(measurement.Value())
+				ts := time.Now().UnixNano() / int64(time.Millisecond)
+				tags := measurement.Id().Tags()
+
+				metric := Metric{
+					Kind:   kind,
+					Values: []TopValue{},
+				}
+				topval := TopValue{
+					Tags: []Tag{},
+					Values: []*Value{
+						&Value{V: value, T: ts},
+					},
+				}
+
+				for k, v := range tags {
+					topval.Tags = append(topval.Tags, Tag{Key: k, Value: v})
+				}
+				for k, v := range ctags {
+					topval.Tags = append(topval.Tags, Tag{Key: k, Value: v})
+				}
+				metric.Values = append(metric.Values, topval)
+
+				data[name] = metric
+			}
+		}
+	}
+
+	return data
 }
