@@ -1,4 +1,4 @@
-module github.com/Netflix/spectator-go
+module github.com/armory-io/spectator-go
 
 go 1.12
 
