@@ -180,13 +180,7 @@ func (r *Registry) sendBatch(measurements []Measurement) {
 func (r *Registry) publish() {
 	if r.config.Uri == "" {
 		// internal publish
-		// 	We merge new metrics into the Export as sample instances are not the same for all metrics
-		metrics := Convert(r)
-		export := r.GetExport()
-		for k, v := range metrics {
-			export[k] = v
-		}
-		r.SetExport(export)
+		r.SetExport(Convert(r))
 		return
 	}
 	// external publish
@@ -380,6 +374,16 @@ func (r *Registry) DistributionSummary(name string, tags map[string]string) *Dis
 func Convert(r *Registry) map[string]Metric {
 	// Take a Registry, convert and return all internal measurements in a format for export
 
+	// modifier contains logic for value modification based on meter kind and statistic
+	modifier := func(kind string, statistic string, val int) int {
+		if kind == "Timer" && statistic != "count" {
+			// If its a timer and statistic of totalTime, totalOfSquares, or max
+			// then we need to convert from seconds to nanoseconds
+			return val * time.Now().Nanosecond()
+		}
+		return val
+	}
+
 	data := map[string]Metric{}
 	ctags := r.config.CommonTags
 
@@ -389,14 +393,10 @@ func Convert(r *Registry) map[string]Metric {
 		for _, measurement := range meter.Measure() {
 			if shouldSendMeasurement(measurement) {
 				name := measurement.Id().Name()
-				value := int(measurement.Value())
 				ts := time.Now().UnixNano() / int64(time.Millisecond)
 				tags := measurement.Id().Tags()
+				value := modifier(kind, tags["statistic"], int(measurement.Value()))
 
-				metric := Metric{
-					Kind:   kind,
-					Values: []TopValue{},
-				}
 				topval := TopValue{
 					Tags: []Tag{},
 					Values: []*Value{
@@ -410,8 +410,17 @@ func Convert(r *Registry) map[string]Metric {
 				for k, v := range ctags {
 					topval.Tags = append(topval.Tags, Tag{Key: k, Value: v})
 				}
-				metric.Values = append(metric.Values, topval)
 
+				// Append the topval to either an existing metric or a new one
+				metric, exists := data[name]
+				if !exists {
+					metric = Metric{
+						Kind:   kind,
+						Values: []TopValue{},
+					}
+				}
+
+				metric.Values = append(metric.Values, topval)
 				data[name] = metric
 			}
 		}
