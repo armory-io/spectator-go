@@ -350,6 +350,67 @@ func TestConvert(t *testing.T) {
 				},
 			},
 		},
+		"one timer": {
+			setup: func(r *Registry) {
+				tmer := r.Timer("test.test", map[string]string{})
+				tmer.Record(1 * time.Second)
+			},
+			expectedOutputs: map[string]Metric{
+				"test.test": Metric{
+					Kind: "Timer",
+					Values: []TopValue{
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "count"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 1, T: 0},
+							},
+						},
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "totalTime"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 100000, T: 0},
+							},
+						},
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "totalOfSquares"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 100000, T: 0},
+							},
+						},
+						TopValue{
+							Tags: []Tag{
+								Tag{Key: "statistic", Value: "max"},
+								Tag{Key: "nf.app", Value: "test"},
+								Tag{Key: "nf.cluster", Value: "test-main"},
+								Tag{Key: "nf.asg", Value: "test-main-v001"},
+								Tag{Key: "nf.region", Value: "us-west-1"},
+							},
+							Values: []*Value{
+								&Value{V: 100000, T: 0},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for testName, c := range cases {
@@ -364,20 +425,38 @@ func TestConvert(t *testing.T) {
 			for name, metric := range c.expectedOutputs {
 				assert.Contains(t, out, name, "Metric should exist in output")
 				outmetric := out[name]
-				assert.Equal(t, metric.Kind, outmetric.Kind, "Metric kind should be equal")
+				kind := metric.Kind
+				assert.Equal(t, kind, outmetric.Kind, "Metric kind should be equal")
 				assert.Equal(t, len(metric.Values), len(outmetric.Values), "Metric values should have the same length")
 
-				topvalue := metric.Values[0] // this works because there is only one topvalue
-				outtopvalue := outmetric.Values[0]
+				for i, topvalue := range metric.Values {
 
-				// tags should match
-				assert.ElementsMatch(t, topvalue.Tags, outtopvalue.Tags, "Tags should match")
+					outtopvalue := outmetric.Values[i]
+					statistic := ""
+					for _, tag := range topvalue.Tags {
+						if tag.Key == "statistic" {
+							statistic = tag.Value
+						}
+					}
 
-				// values should match
-				assert.Equal(t, topvalue.Values[0].V, outtopvalue.Values[0].V, "Values should match")
+					// tags should match
+					assert.ElementsMatch(t, topvalue.Tags, outtopvalue.Tags, "Tags should match")
+					assert.NotEqual(t, "", statistic, "Tag Statistic should exist")
 
+					// values should meet expectations based on metric kind
+					switch kind {
+					case "Timer":
+						if statistic == "count" {
+							assert.Equal(t, topvalue.Values[0].V, outtopvalue.Values[0].V, "Timer values of statistic count should match")
+						} else {
+							// Timer values for statistics max, totalTime, and totalOfSquares cannot be exact
+							assert.GreaterOrEqualf(t, outtopvalue.Values[0].V, topvalue.Values[0].V, "Timer values of statistic %s should be >= expected values", statistic)
+						}
+					default:
+						assert.Equalf(t, topvalue.Values[0].V, outtopvalue.Values[0].V, "Values for metric kind %s and statistic %s should match", kind, statistic)
+					}
+				}
 			}
-
 		})
 	}
 }
