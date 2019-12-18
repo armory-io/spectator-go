@@ -247,9 +247,7 @@ func withDefaultTags(tags ...Tag) []Tag {
 	for k, v := range config.CommonTags {
 		defaultTags = append(defaultTags, Tag{Key: k, Value: v})
 	}
-	for _, t := range tags {
-		defaultTags = append(defaultTags, t)
-	}
+	defaultTags = append(defaultTags, tags...)
 	return defaultTags
 }
 
