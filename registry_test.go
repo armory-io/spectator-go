@@ -242,6 +242,17 @@ func TestRegistry_enabled(t *testing.T) {
 	assertEqual(t, called, 3, "expected 3 publish calls")
 }
 
+func withDefaultTags(tags ...Tag) []Tag {
+	defaultTags := []Tag{}
+	for k, v := range config.CommonTags {
+		defaultTags = append(defaultTags, Tag{Key: k, Value: v})
+	}
+	for _, t := range tags {
+		defaultTags = append(defaultTags, t)
+	}
+	return defaultTags
+}
+
 func TestConvert(t *testing.T) {
 
 	cases := map[string]struct {
@@ -258,13 +269,7 @@ func TestConvert(t *testing.T) {
 					Kind: "Counter",
 					Values: []TopValue{
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "count"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "count"}),
 							Values: []*Value{
 								&Value{V: 1, T: 0},
 							},
@@ -287,16 +292,12 @@ func TestConvert(t *testing.T) {
 					Kind: "Counter",
 					Values: []TopValue{
 						TopValue{
-							Tags: []Tag{
+							Tags: withDefaultTags(
 								Tag{Key: "statistic", Value: "count"},
 								Tag{Key: "test", Value: "yes"},
 								Tag{Key: "yoda", Value: "false"},
 								Tag{Key: "rodeo", Value: "true"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							),
 							Values: []*Value{
 								&Value{V: 1, T: 0},
 							},
@@ -318,13 +319,7 @@ func TestConvert(t *testing.T) {
 					Kind: "Counter",
 					Values: []TopValue{
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "count"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "count"}),
 							Values: []*Value{
 								&Value{V: 1, T: 0},
 							},
@@ -335,13 +330,7 @@ func TestConvert(t *testing.T) {
 					Kind: "Counter",
 					Values: []TopValue{
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "count"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "count"}),
 							Values: []*Value{
 								&Value{V: 2, T: 0},
 							},
@@ -360,49 +349,25 @@ func TestConvert(t *testing.T) {
 					Kind: "Timer",
 					Values: []TopValue{
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "count"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "count"}),
 							Values: []*Value{
 								&Value{V: 1, T: 0},
 							},
 						},
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "totalTime"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "totalTime"}),
 							Values: []*Value{
 								&Value{V: 100000, T: 0},
 							},
 						},
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "totalOfSquares"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "totalOfSquares"}),
 							Values: []*Value{
 								&Value{V: 100000, T: 0},
 							},
 						},
 						TopValue{
-							Tags: []Tag{
-								Tag{Key: "statistic", Value: "max"},
-								Tag{Key: "nf.app", Value: "test"},
-								Tag{Key: "nf.cluster", Value: "test-main"},
-								Tag{Key: "nf.asg", Value: "test-main-v001"},
-								Tag{Key: "nf.region", Value: "us-west-1"},
-							},
+							Tags: withDefaultTags(Tag{Key: "statistic", Value: "max"}),
 							Values: []*Value{
 								&Value{V: 100000, T: 0},
 							},
